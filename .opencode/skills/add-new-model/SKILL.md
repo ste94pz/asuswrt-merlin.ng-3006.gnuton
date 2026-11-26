@@ -21,7 +21,9 @@ For the prebuilt-copy workflow itself, also read
 3. **Profile** — the `PROFILE="..."` value on the model's base target, e.g.
    `96765GW`. This is used by target files and model selection.
 4. **GPL root** — e.g. `/home/gnuton/ASUS/RT-BE58U/asuswrt`.
-5. **Repository root** — e.g. `/home/gnuton/ASUS/asuswrt-merlin.ng`.
+5. **Repository root** — the 3006 checkout of
+   `Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton` (e.g.
+   `/home/gnuton/ASUS/migration/3006-work`).
 6. **Current branch** — usually a model-specific branch such as
    `3006.102.9_RT-BE58U`.
 
@@ -73,18 +75,21 @@ the GPL. Also check `release/src-rt/Makefile` for model-specific branches
 
 ## 3. Add the model to CI
 
-Edit `.github/workflows/github-actions.yml` matrix. Use the lowercase model
-name because CI runs `make "${MODEL}"`.
+Edit the `prepare-job` matrix `entries` array in
+`.github/workflows/github-actions.yml`. Use the lowercase model name because
+CI runs `make "${MODEL}"`.
 
 ```yaml
-- { model: "<model-lowercase>", sdk: "src-rt-5.04behnd.4916", ui: "default", skip: false }
+'{"model":"<model-lowercase>","sdk":"src-rt-5.04behnd.4916","ui":"default","skip":false}'
 ```
 
 Add `rog`/`tuf` rows only if the model supports that UI. Do not add a ROG row
 just because other models have one.
 
-If CI is temporarily limited to one model, comment the others out with an
-explicit note and remember to restore them.
+To build only one entry while developing, use the `workflow_dispatch` `model`
+input (for example `rt-be82m`) instead of commenting matrix rows out. Leaving
+the input empty builds the full matrix. This repository only builds `3006.*`
+tags; the build job rejects any other tag before compiling.
 
 ## 4. Add copy-prebuilt support
 
@@ -128,8 +133,8 @@ Run from the GPL root, with `REPO` pointing at the repo:
 ```bash
 cd "$GPL"
 
-REPO=/home/gnuton/ASUS/asuswrt-merlin.ng \
-  /home/gnuton/ASUS/asuswrt-merlin.ng/tools/copy-prebuilt <MODEL> \
+REPO=/home/gnuton/ASUS/migration/3006-work \
+  /home/gnuton/ASUS/migration/3006-work/tools/copy-prebuilt <MODEL> \
   | tee /tmp/copy-prebuilt-<model>.log
 ```
 
@@ -224,18 +229,18 @@ matrix once.
 ## 9. CI iteration
 
 Use `gh` with an explicit repository (the repo has both `origin` and an
-`upstream` remote; without `-R` it may query RMerl):
+`upstream` remote; without `-R` it may query RMerl or the 3004 repo):
 
 ```bash
-gh run list -R gnuton/asuswrt-merlin.ng --branch <branch> --limit 5
-gh run view -R gnuton/asuswrt-merlin.ng <run-id> --log-failed
+gh run list -R Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton --branch <branch> --limit 5
+gh run view -R Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton <run-id> --log-failed
 ```
 
 For a specific failed job whose run is still in progress:
 
 ```bash
 gh api --allow-escape-sequences \
-  repos/gnuton/asuswrt-merlin.ng/actions/jobs/<job-id>/logs \
+  repos/Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton/actions/jobs/<job-id>/logs \
   > /tmp/job.log
 
 sed -r 's/\x1B\[[0-9;]*[A-Za-z]//g' /tmp/job.log > /tmp/job-clean.log

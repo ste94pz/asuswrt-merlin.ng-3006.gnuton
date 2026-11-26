@@ -1,0 +1,103 @@
+name: Notify website
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to announce (dry run)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notify-website
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    steps:
+      # WEBSITE_DISPATCH_MODE selects "app" or "pat". The fine-grained PAT is
+      # scoped to website.gnuton with Contents: write, and is the fallback when
+      # the App cannot be installed.
+      #
+      # The "GNUton Firmware Website Notifier" App is owned by the
+      # Asuswrt-Merlin organization and installed on website.gnuton.
+      # actions/create-github-app-token@v3 authenticates with the App client ID
+      # (WEBSITE_APP_CLIENT_ID) instead of the numeric App ID, which it
+      # deprecates. The legacy WEBSITE_APP_ID secret is kept for older branches
+      # but is no longer read here.
+      - name: Select dispatch credentials
+        id: credentials
+        env:
+          APP_CLIENT_ID: ${{ vars.WEBSITE_APP_CLIENT_ID }}
+          APP_KEY: ${{ secrets.WEBSITE_APP_PRIVATE_KEY }}
+          PAT: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          mode="${{ vars.WEBSITE_DISPATCH_MODE }}"
+          if [ -z "${mode}" ]; then
+            if [ -n "${APP_CLIENT_ID}" ]; then
+              mode="app"
+            else
+              mode="pat"
+            fi
+          fi
+
+          case "${mode}" in
+            app)
+              if [ -z "${APP_CLIENT_ID}" ]; then
+                echo "::error::WEBSITE_DISPATCH_MODE=app requires the WEBSITE_APP_CLIENT_ID repository variable."
+                exit 1
+              fi
+              if [ -z "${APP_KEY}" ]; then
+                echo "::error::WEBSITE_DISPATCH_MODE=app requires the WEBSITE_APP_PRIVATE_KEY secret."
+                exit 1
+              fi
+              ;;
+            pat)
+              if [ -z "${PAT}" ]; then
+                echo "::error::WEBSITE_DISPATCH_MODE=pat requires the WEBSITE_DISPATCH_TOKEN secret."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::Unknown WEBSITE_DISPATCH_MODE '${mode}'. Expected 'app' or 'pat'."
+              exit 1
+              ;;
+          esac
+
+          echo "mode=${mode}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create website token
+        id: app
+        if: steps.credentials.outputs.mode == 'app'
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.WEBSITE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.WEBSITE_APP_PRIVATE_KEY }}
+          owner: Asuswrt-Merlin
+          repositories: website.gnuton
+
+      - name: Send firmware-release event
+        env:
+          GH_TOKEN: ${{ steps.credentials.outputs.mode == 'app' && steps.app.outputs.token || secrets.WEBSITE_DISPATCH_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          PRERELEASE: ${{ github.event.release.prerelease || false }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^(3006|3004|386)\. ]] || {
+            echo "::error::Unexpected tag: $TAG"
+            exit 1
+          }
+          jq -n \
+            --arg repository "$REPOSITORY" \
+            --arg tag "$TAG" \
+            --argjson prerelease "$PRERELEASE" \
+            '{event_type: "firmware-release", client_payload: {repository: $repository, tag: $tag, prerelease: $prerelease}}' \
+            | gh api repos/Asuswrt-Merlin/website.gnuton/dispatches --input -

@@ -1,10 +1,12 @@
 #!/bin/sh
 
-readonly SCRIPT_VERSTAG="25072411"
+# Please increment whenever updater behavior or feed compatibility changes.
+# SCRIPT_VERSTAG format: YYMMDDHH
+readonly SCRIPT_VERSTAG="26112413"
 
 wget_options="-q -t 2 -T 30"
 
-fwsite="https://raw.githubusercontent.com/gnuton/asuswrt-merlin.ng/master/updates"
+fwsite="https://raw.githubusercontent.com/Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton/master/updates"
 
 nvram set webs_state_update=0 # INITIALIZING
 nvram set webs_state_flag=0   # 0: Don't do upgrade  1: Do upgrade
@@ -30,13 +32,13 @@ forsq=$(nvram get apps_sq)
 model=$(nvram get productid)
 model="$model#"
 
+# This repo has no separate test feed: use the main 3006 feed for both paths.
 if [ "$forsq" == "1" ]; then
-	echo "---- update sq normal----" > /tmp/webs_upgrade.log
-	/usr/sbin/wget $wget_options $fwsite/test/manifest2.txt -O /tmp/wlan_update.txt
+	echo "---- update sq normal (main feed)----" > /tmp/webs_upgrade.log
 else
 	echo "---- update real normal----" > /tmp/webs_upgrade.log
-	/usr/sbin/wget $wget_options $fwsite/manifest2.txt -O /tmp/wlan_update.txt
 fi
+/usr/sbin/wget $wget_options $fwsite/manifest_3006.txt -O /tmp/wlan_update.txt
 
 if [ "$?" != "0" ]; then
 	nvram set webs_state_error=1
@@ -101,17 +103,17 @@ fi
 webs_state_flag=$(nvram get webs_state_flag)
 
 if [ "$webs_state_flag" -eq "1" ]; then
-	releasenote_file0_US=$(nvram get webs_state_info)_note.txt
+	# Release note files keep the tag spelling (3006_102.9_1-gnuton1_note.txt),
+	# unlike webs_state_info which uses underscores between all version parts.
+	releasenote_file0_US="${firmbase}_${firmver}.${buildno}_${extendno}_note.txt"
 	releasenote_path0="/tmp/release_note0.txt"
 	if [ "$forsq" == "1" ]; then
-		echo "---- download SQ release note $fwsite/test/$releasenote_file0_US ----" >> /tmp/webs_upgrade.log
-		/usr/sbin/wget $wget_options $fwsite/test/$releasenote_file0_US -O $releasenote_path0
-		echo "---- $fwsite/test/$releasenote_file0 ----" >> /tmp/webs_upgrade.log
+		echo "---- download SQ release note (main feed) $fwsite/$releasenote_file0_US ----" >> /tmp/webs_upgrade.log
 	else
 		echo "---- download real release note ----" >> /tmp/webs_upgrade.log
-		/usr/sbin/wget $wget_options $fwsite/$releasenote_file0_US -O $releasenote_path0
-		echo "---- $fwsite/$releasenote_file0 ----" >> /tmp/webs_upgrade.log
 	fi
+	/usr/sbin/wget $wget_options $fwsite/$releasenote_file0_US -O $releasenote_path0
+	echo "---- $fwsite/$releasenote_file0_US ----" >> /tmp/webs_upgrade.log
 
 	if [ "$?" != "0" ]; then
 		echo "---- download SQ release note failed ----" >> /tmp/webs_upgrade.log

@@ -15,7 +15,9 @@ a model-specific prebuilt was not copied or no longer matches the source.
 1. **GPL root**: the extracted ASUS source directory. It must contain
    `release/src-rt-5.04behnd.4916` for BE models. Example:
    `/home/gnuton/ASUS/GT-BE98/asuswrt`.
-2. **Repository root**: usually `/home/gnuton/ASUS/asuswrt-merlin.ng`.
+2. **Repository root**: the 3006 checkout, usually
+   `/home/gnuton/ASUS/migration/3006-work`
+   (`Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton`).
 3. **Model/build name**: the `BUILD_NAME` used by the GPL, for example
    `GT-BE98`. This is not always the same as the marketing model.
 4. **Target branch**: confirm the current branch and that the tree is clean
@@ -52,8 +54,8 @@ root. `REPO` must point at this repository.
 ```bash
 cd /home/gnuton/ASUS/GT-BE98/asuswrt
 
-REPO=/home/gnuton/ASUS/asuswrt-merlin.ng \
-  /home/gnuton/ASUS/asuswrt-merlin.ng/tools/copy-prebuilt GT-BE98 \
+REPO=/home/gnuton/ASUS/migration/3006-work \
+  /home/gnuton/ASUS/migration/3006-work/tools/copy-prebuilt GT-BE98 \
   | tee /tmp/copy-prebuilt-gt-be98.log
 ```
 
@@ -152,15 +154,17 @@ Do not stage unrelated untracked files such as editor swap files.
 
 ## CI monitoring
 
-The workflow is `.github/workflows/github-actions.yml` and triggers on every
-push and pull request. It builds two jobs: `default` and `rog`.
+The workflow is `.github/workflows/github-actions.yml`. It runs on code pushes
+(`updates/**` and `**/*.md` are ignored), pull requests, `workflow_dispatch`
+(with an optional `model` input), and `3006.*` tags. It builds the model/UI
+matrix (currently GT-BE98 default+ROG, RT-BE58U, RT-BE82U, RT-BE82M).
 
 Always pass the repository explicitly; `gh` may otherwise resolve the
-`upstream` remote (RMerl) instead of the fork:
+`upstream` remote (RMerl) or the 3004 repository instead of this 3006 fork:
 
 ```bash
-gh run list -R gnuton/asuswrt-merlin.ng --branch 3006.102.9 --limit 5
-gh run view -R gnuton/asuswrt-merlin.ng <RUN_ID> --log-failed
+gh run list -R Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton --branch 3006.102.9 --limit 5
+gh run view -R Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton <RUN_ID> --log-failed
 ```
 
 For long runs, poll with retries instead of `gh run watch` (which aborts on a
@@ -168,7 +172,7 @@ transient GitHub API error):
 
 ```bash
 while true; do
-  st=$(gh api repos/gnuton/asuswrt-merlin.ng/actions/runs/<RUN_ID> \
+  st=$(gh api repos/Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton/actions/runs/<RUN_ID> \
         --jq '.status' 2>/dev/null) || st=""
   [ "$st" = "completed" ] && break
   sleep 60
@@ -307,7 +311,7 @@ corresponding page; it does not reference a missing symbol.
 After each push, download only the failed log:
 
 ```bash
-gh run view -R gnuton/asuswrt-merlin.ng <RUN_ID> --log-failed \
+gh run view -R Asuswrt-Merlin/asuswrt-merlin.ng-3006.gnuton <RUN_ID> --log-failed \
   > /tmp/run-failed.log
 
 grep -iE 'fatal error|undefined reference|No such file|cannot stat|Error [0-9]|\*\*\*' \
